@@ -1,629 +1,551 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>도트 경마 베팅 프로토타입</title>
-<style>
-  :root {
-    --bg:#0b0e16; --panel:#0f1424; --line:#1f2940; --text:#c8d0ff;
-    --accent:#6C5CE7; --good:#9df7c7; --warn:#ffd26e; --bad:#ff7a9e;
-  }
-  html,body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  .wrap { max-width:980px; margin:0 auto; padding:14px; }
-  h1 { margin:0 0 8px; font-size:20px; color:#fff; }
-  .grid { display:grid; grid-template-columns: 520px 1fr; gap:12px; }
-  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; }
-  canvas { width:100%; height:auto; display:block; image-rendering:pixelated; border-radius:8px; border:1px solid var(--line); }
-  table { width:100%; border-collapse:collapse; font-size:12px; }
-  th, td { border-bottom:1px dashed var(--line); padding:6px 8px; text-align:center; }
-  th { color:#9fb0ff; }
-  .badge { display:inline-block; padding:2px 6px; border-radius:999px; font-size:11px; border:1px solid var(--line); background:#111729; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .row > * { flex: 1 1 auto; }
-  select, input[type=number], input[type=text] { width:100%; background:#0d1330; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; }
-  button { background:var(--accent); color:white; border:0; border-radius:8px; padding:8px 12px; cursor:pointer; }
-  button.secondary { background:#1e2a53; color:#dbe1ff; }
-  button.ghost { background:transparent; border:1px solid var(--line); color:var(--text); }
-  .hint { font-size:12px; opacity:.75; margin-top:6px; }
-  .pill { padding:2px 8px; border-radius:999px; background:#141a33; border:1px solid var(--line); }
-  .money { font-weight:700; color:#ffd26e; }
-  .odds { font-variant-numeric: tabular-nums; }
-  .footer { margin-top:10px; font-size:12px; opacity:.8; }
-  .ticket { background:#0e1531; border:1px solid var(--line); padding:8px; border-radius:8px; margin:6px 0; font-size:12px; }
-  .laneTag { display:inline-block; width:16px; height:16px; border-radius:4px; margin-right:6px; vertical-align:middle; }
-  .flex { display:flex; gap:8px; align-items:center; }
-  .right { text-align:right; }
-  .small { font-size:12px; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>도트 비행 슈팅 - 적 미사일 추가</title>
+  <style>
+    html, body { margin:0; height:100%; background:#0b0e16; color:#c8d0ff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .wrap { max-width:420px; margin:0 auto; padding:12px; }
+    .stage { position:relative; width:100%; aspect-ratio:9/16; background:#090c14; border:1px solid #1f2940; border-radius:10px; overflow:hidden; }
+    canvas { width:100%; height:100%; display:block; image-rendering: pixelated; }
+    .hud { position:absolute; left:8px; top:6px; font-size:12px; opacity:.9; text-shadow:0 1px 0 rgba(0,0,0,.4); }
+    .btns { display:flex; gap:8px; justify-content:flex-end; align-items:center; position:absolute; right:8px; top:6px; }
+    .btn { font-size:12px; background:#16203a; color:#dbe1ff; border:1px solid #2c3a63; border-radius:6px; padding:4px 8px; cursor:pointer; }
+    .btn:active { transform:translateY(1px); }
+    .diff { position:absolute; left:8px; bottom:6px; display:flex; gap:6px; }
+    .diff .btn.active { background:#314070; border-color:#576bb1; color:#ffffff; }
+    .hint { margin-top:8px; font-size:12px; opacity:.65; text-align:center; }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>도트 경마 베팅</h1>
-  <div class="grid">
-    <div class="panel">
+  <div class="wrap">
+    <div class="stage">
       <canvas id="game"></canvas>
-      <div class="row" style="margin-top:8px;">
-        <button id="btnNew" class="secondary">다음 경주 편성</button>
-        <button id="btnStart">출발!</button>
-        <div class="pill">경주번호 <span id="raceNo">1</span></div>
-        <div class="pill">지갑 <span id="wallet" class="money">0</span> 원</div>
+      <div class="hud" id="hud">SCORE 0 | LIFE ❤×3 | MODE CASUAL</div>
+      <div class="btns">
+        <button class="btn" id="soundBtn">🔊 사운드 켜기</button>
       </div>
-      <div class="hint">참고: 실제 베팅 아님. 컨디션(숨김)과 랜덤 이벤트로 고능력마가 항상 이기지 않습니다.</div>
-    </div>
-
-    <div class="panel">
-      <div class="row">
-        <div class="pill">테이크아웃 18%</div>
-        <div class="pill">두 수: <span id="fieldSize">-</span></div>
-        <div class="pill">예상 배당은 AI 풀 기준</div>
-      </div>
-
-      <table id="tbl">
-        <thead>
-          <tr>
-            <th>번</th><th>마명</th><th>기수</th>
-            <th>속력</th><th>지구력</th><th>스퍼트</th><th>기수숙련</th>
-            <th>예상단승</th><th>예상연승</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-
-      <div style="margin-top:10px;">
-        <div class="row">
-          <select id="betType">
-            <option value="WIN">단승식 (1착)</option>
-            <option value="PLACE">연승식 (3위 내)</option>
-            <option value="QUINELLA">복승식 (1·2착 순서무관)</option>
-            <option value="EXACTA">쌍승식 (1·2착 순서일치)</option>
-          </select>
-          <input id="pickA" type="number" min="1" value="1" placeholder="말 번호" />
-          <input id="pickB" type="number" min="1" value="2" placeholder="두번째 말(필요시)" />
-          <input id="amount" type="number" min="100" step="100" value="1000" />
-          <button id="btnAdd">베팅 추가</button>
-        </div>
-        <div class="hint">WIN/PLACE는 말 1두, QUINELLA/EXACTA는 말 2두를 입력해줘.</div>
-        <div id="tickets"></div>
+      <div class="diff">
+        <button class="btn" id="casualBtn">캐주얼</button>
+        <button class="btn" id="hardcoreBtn">하드코어</button>
       </div>
     </div>
+    <div class="hint">PC: 방향키 이동, 스페이스/엔터 발사 · 모바일: 화면 드래그 이동(자동 발사) · 난이도는 타이틀에서 변경</div>
   </div>
 
-  <div class="panel" style="margin-top:12px;">
-    <div class="row">
-      <div class="pill">결과</div>
-      <div id="resultText"></div>
-    </div>
-    <div id="payouts" class="small" style="margin-top:8px;"></div>
-  </div>
+  <script>
+  (()=> {
+    // ---------------- 기본 세팅 ----------------
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const HUD = document.getElementById('hud');
+    const soundBtn = document.getElementById('soundBtn');
+    const casualBtn = document.getElementById('casualBtn');
+    const hardcoreBtn = document.getElementById('hardcoreBtn');
 
-  <div class="footer">© 도검유트브 — GitHub Pages에 index.html 업로드 후 티스토리에 iframe으로 임베드하면 끝!</div>
-</div>
+    const SCALE = 3;           // 도트 스케일
+    const W = 160, H = 240;    // 가상 해상도
+    canvas.width = W * SCALE;
+    canvas.height = H * SCALE;
+    ctx.imageSmoothingEnabled = false;
 
-<script>
-(()=> {
-  // ---------------- 기본 상수/상태 ----------------
-  const TAKE = 0.18;            // 테이크아웃(배당 공제)
-  const HORSES = 12;            // 출전 마수
-  const TRACK_LEN = 1000;       // 트랙 길이(가상)
-  const LANE_H = 14;            // 한 레인 높이(도트)
-  const SCALE = 3;              // 캔버스 스케일(도트)
-  const W = 300, H = LANE_H * (HORSES + 2); // 가상 해상도
-  const COLORS = [
-    '#ff6b6b','#feca57','#1dd1a1','#5f27cd','#54a0ff',
-    '#ff9ff3','#48dbfb','#576574','#c8d6e5','#ffaf40','#10ac84','#ee5253'
-  ];
-
-  // 캔버스
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  canvas.width = W * SCALE;
-  canvas.height = H * SCALE;
-  ctx.imageSmoothingEnabled = false;
-
-  // DOM
-  const tblBody = document.querySelector('#tbl tbody');
-  const fieldSizeEl = document.getElementById('fieldSize');
-  const walletEl = document.getElementById('wallet');
-  const ticketsEl = document.getElementById('tickets');
-  const resultEl = document.getElementById('resultText');
-  const payoutsEl = document.getElementById('payouts');
-  const raceNoEl = document.getElementById('raceNo');
-
-  const btnNew = document.getElementById('btnNew');
-  const btnStart = document.getElementById('btnStart');
-  const btnAdd = document.getElementById('btnAdd');
-  const selType = document.getElementById('betType');
-  const pickA = document.getElementById('pickA');
-  const pickB = document.getElementById('pickB');
-  const amount = document.getElementById('amount');
-
-  // 지갑
-  let wallet = Number(localStorage.getItem('wallet') || 100000);
-  updateWallet(0);
-  let raceNo = Number(localStorage.getItem('raceNo') || 1);
-  raceNoEl.textContent = raceNo;
-
-  // 경주 데이터
-  const namesA = ['은하','폭풍','달빛','천둥','유니','블레이즈','다크','초신성','스텔라','라이트','제트','린드'];
-  const namesB = ['스텝','런','윈드','블리츠','애로우','하모니','웨이브','스파크','피닉스','레인','헤일로','스피릿'];
-  const jockeyA = ['박','김','이','최','정','한','윤','임','장','서','유','문','안','도','노','송'];
-  const jockeyB = ['현우','지훈','민수','서연','도윤','하준','예린','지호','서윤','태현','시우','하린','보미','유진','가윤','민재'];
-
-  const rand = (a,b)=> a + Math.random()*(b-a);
-  const rint = (a,b)=> Math.floor(rand(a,b+1));
-  const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
-  const choice = arr => arr[Math.floor(Math.random()*arr.length)];
-
-  // 상태
-  let roster = [];        // 말/기수/능력
-  let pools;              // 베팅 풀
-  let userTickets = [];   // 내 티켓 목록
-  let running = false;    // 레이스 진행 중
-  let finishedOrder = []; // 도착 순서(인덱스)
-  let time = 0;           // 경과 프레임
-  let acc = 0;            // fixed step accumulator
-  const FIXED = 1000/60;
-
-  // ---------------- 초기화 ----------------
-  newRace();
-
-  // 새 경주
-  function newRace() {
-    running = false;
-    time = 0; acc = 0;
-    finishedOrder.length = 0;
-    resultEl.textContent = '';
-    payoutsEl.innerHTML = '';
-
-    // 말/기수 생성
-    roster = Array.from({length:HORSES}, (_,i) => {
-      const speed = rint(60, 99);
-      const stamina = rint(55, 95);
-      const burst = rint(50, 98);
-      const jockeySkill = rint(60, 98);
-      const horseCond = rand(0.88, 1.12); // 숨김
-      const jockeyCond = rand(0.90, 1.10); // 숨김
-      const name = choice(namesA) + choice(namesB);
-      const jockey = choice(jockeyA) + choice(jockeyB);
-      // 예측용 공개 레이팅(컨디션 미포함)
-      const rating = speed*0.5 + stamina*0.3 + burst*0.15 + jockeySkill*0.2;
-      return {
-        no:i+1, color: COLORS[i%COLORS.length], name, jockey,
-        speed, stamina, burst, jockeySkill,
-        horseCond, jockeyCond,
-        rating,
-        x: 0, y: LANE_H*(i+1), vx:0,
-        fatigue:1, stumble:0, finished:false, finishTime:null
-      };
-    });
-
-    // AI 풀 생성(예상 배당 표시용)
-    pools = makePools(roster);
-    renderTable();
-    renderPayoutPreview();
-
-    // UI
-    fieldSizeEl.textContent = roster.length;
-    userTickets = [];
-    rebuildTickets();
-    drawScene();
-  }
-
-  // 풀 생성
-  function makePools(roster) {
-    const baseWin = 80000, basePlace = 60000, baseQuin = 120000, baseExact = 100000;
-    const weights = roster.map(r => Math.pow(r.rating, 1.8)); // 강할수록 베팅 몰림
-    const wsum = weights.reduce((a,b)=>a+b,0);
-
-    const win = roster.map((r,i)=> ({
-      key:`H${i}`, amount: Math.max(1000, (weights[i]/wsum)*baseWin * rand(0.8,1.2))
-    }));
-
-    const place = roster.map((r,i)=> ({
-      key:`P${i}`, amount: Math.max(1000, (weights[i]/wsum)*basePlace * rand(0.9,1.2))
-    }));
-
-    // 복승(무순서)
-    const quin = {};
-    for (let i=0;i<roster.length;i++){
-      for (let j=i+1;j<roster.length;j++){
-        const w = (weights[i]*weights[j]);
-        quin[`${i}-${j}`] = Math.max(500, (w/(wsum*wsum))*baseQuin * rand(0.8,1.3));
-      }
-    }
-
-    // 쌍승(순서)
-    const exact = {};
-    for (let i=0;i<roster.length;i++){
-      for (let j=0;j<roster.length;j++){
-        if (i===j) continue;
-        const w = (weights[i]*weights[j]*1.1);
-        exact[`${i}>${j}`] = Math.max(300, (w/(wsum*wsum))*baseExact * rand(0.8,1.3));
-      }
-    }
-
-    return { win, place, quin, exact };
-  }
-
-  // 예상 배당 계산(현재 풀 기준)
-  function renderPayoutPreview() {
-    const estWin = pools.win.map((p,i)=>{
-      const total = pools.win.reduce((a,b)=>a+b.amount,0);
-      const ret = (total*(1-TAKE))/p.amount;
-      return { i, ret: Math.max(1.0, ret).toFixed(1) };
-    });
-    const estPlace = pools.place.map((p,i)=>{
-      const total = pools.place.reduce((a,b)=>a+b.amount,0);
-      const ret = (total*(1-TAKE))/p.amount;
-      return { i, ret: Math.max(1.0, ret).toFixed(1) };
-    });
-
-    // 표에 주입
-    for (let i=0;i<roster.length;i++){
-      const tr = tblBody.children[i];
-      tr.querySelector('[data-odds-win]').textContent = estWin[i].ret;
-      tr.querySelector('[data-odds-place]').textContent = estPlace[i].ret;
-    }
-  }
-
-  // 표 만들기
-  function renderTable() {
-    tblBody.innerHTML = '';
-    roster.forEach((r, idx) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><span class="laneTag" style="background:${r.color}"></span>${r.no}</td>
-        <td>${r.name}</td>
-        <td>${r.jockey}</td>
-        <td>${r.speed}</td>
-        <td>${r.stamina}</td>
-        <td>${r.burst}</td>
-        <td>${r.jockeySkill}</td>
-        <td class="odds" data-odds-win>-</td>
-        <td class="odds" data-odds-place>-</td>
-      `;
-      tblBody.appendChild(tr);
-    });
-  }
-
-  // 티켓 관리
-  function rebuildTickets() {
-    ticketsEl.innerHTML = '';
-    if (userTickets.length === 0) {
-      ticketsEl.innerHTML = `<div class="hint">베팅을 추가해줘. 하나의 경주에 여러 티켓 가능!</div>`;
-      return;
-    }
-    userTickets.forEach((t,idx)=>{
-      const div = document.createElement('div');
-      div.className = 'ticket flex';
-      div.innerHTML = `
-        <div class="badge">${t.type}</div>
-        <div>${descTicket(t)}</div>
-        <div class="right" style="flex:1"></div>
-        <div><span class="money">${fmt(t.amount)}</span> 원</div>
-        <button class="ghost small" data-del="${idx}">삭제</button>
-      `;
-      ticketsEl.appendChild(div);
-    });
-    ticketsEl.querySelectorAll('[data-del]').forEach(btn=>{
-      btn.onclick = (e)=>{
-        const i = Number(btn.dataset.del);
-        updateWallet(userTickets[i].amount); // 환불
-        userTickets.splice(i,1);
-        rebuildTickets();
-      }
-    });
-  }
-
-  function descTicket(t) {
-    const m = (i)=> `${roster[i].no} ${roster[i].name}`;
-    if (t.type==='WIN') return `단승식: ${m(t.a)}`;
-    if (t.type==='PLACE') return `연승식: ${m(t.a)}`;
-    if (t.type==='QUINELLA') return `복승식: ${m(t.a)} - ${m(t.b)} (순서무관)`;
-    if (t.type==='EXACTA') return `쌍승식: ${m(t.a)} > ${m(t.b)} (순서일치)`;
-    return '';
-  }
-
-  function updateWallet(delta) {
-    wallet += delta;
-    walletEl.textContent = fmt(wallet);
-    localStorage.setItem('wallet', wallet);
-  }
-
-  // ---------------- 입력/버튼 ----------------
-  btnAdd.onclick = ()=>{
-    const type = selType.value;
-    let a = Number(pickA.value)-1;
-    let b = Number(pickB.value)-1;
-    const amt = Math.max(100, Math.floor(Number(amount.value)/100)*100);
-
-    if (running) return alert('경주 중에는 베팅할 수 없어!');
-    if (!Number.isFinite(amt) || amt<=0) return alert('금액을 확인해줘.');
-    if (wallet < amt) return alert('지갑이 부족해 ㅠㅠ');
-
-    if (type==='WIN' || type==='PLACE') {
-      if (!inRange(a,0,roster.length-1)) return alert('말 번호 확인!');
-      addUserPool(type, a, null, amt);
-      userTickets.push({ type, a, amount: amt });
-    } else if (type==='QUINELLA' || type==='EXACTA') {
-      if (!inRange(a,0,roster.length-1) || !inRange(b,0,roster.length-1) || a===b) return alert('두 말 번호 확인!');
-      addUserPool(type, a, b, amt);
-      userTickets.push({ type, a, b, amount: amt });
-    }
-    updateWallet(-amt);
-    rebuildTickets();
-    renderPayoutPreview();
-  };
-
-  btnStart.onclick = ()=>{
-    if (running) return;
-    if (userTickets.length === 0) {
-      if (!confirm('베팅 없이 시작할까?')) return;
-    }
-    running = true;
-  };
-
-  btnNew.onclick = ()=>{
-    if (running && !confirm('진행 중인 경주를 포기하고 새로 편성할까요?')) return;
-    raceNo += 1;
-    raceNoEl.textContent = raceNo;
-    localStorage.setItem('raceNo', raceNo);
-    newRace();
-  };
-
-  function inRange(v,a,b){ return v>=a && v<=b; }
-
-  // 유저 베팅을 풀에 합산
-  function addUserPool(type, a, b, amt) {
-    if (type==='WIN') pools.win[a].amount += amt;
-    else if (type==='PLACE') pools.place[a].amount += amt;
-    else if (type==='QUINELLA') {
-      const [i,j] = a<b ? [a,b] : [b,a];
-      const key = `${i}-${j}`;
-      pools.quin[key] = (pools.quin[key]||0) + amt;
-    } else if (type==='EXACTA') {
-      const key = `${a}>${b}`;
-      pools.exact[key] = (pools.exact[key]||0) + amt;
-    }
-  }
-
-  // ---------------- 레이스 로직 ----------------
-  // 60fps 고정 스텝
-  let last = performance.now();
-  function loop(ts) {
-    let delta = ts - last; last = ts;
-    if (delta>250) delta=250;
-    acc += delta;
-    while (acc >= FIXED) {
-      update(FIXED);
-      acc -= FIXED;
-    }
-    drawScene();
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-
-  function update() {
-    if (!running) return;
-
-    time++;
-
-    roster.forEach((r)=>{
-      if (r.finished) return;
-
-      // 기본 속도(도/프레임) — 속력·숙련 반영
-      const base = (1.6 + r.speed/70) * (1 + (r.jockeySkill-70)/400);
-
-      // 컨디션(숨김)
-      const cond = r.horseCond * r.jockeyCond;
-
-      // 피로도: 진행 비율에 따라 속도 저하(지구력 좋으면 덜 떨어짐)
-      const prog = r.x / TRACK_LEN;
-      const fatigueDrop = 1 - (prog * (1.2 - r.stamina/100));
-      r.fatigue = clamp(fatigueDrop, 0.72, 1.02);
-
-      // 막판 스퍼트
-      const kick = (prog > 0.8) ? (1 + (r.burst/100)*0.35) : 1;
-
-      // 미세 랜덤
-      const jitter = rand(0.98, 1.02);
-
-      // 드문 실수 이벤트(0.7%/초): 60프레임 기준 약 0.0117/프레임
-      if (r.stumble<=0 && Math.random() < 0.0117) {
-        r.stumble = rint(30, 70); // 0.5~1.2초 감속
-      }
-      const stumbleMul = (r.stumble>0) ? 0.72 : 1;
-      if (r.stumble>0) r.stumble--;
-
-      // 최종 속도
-      const v = base * cond * r.fatigue * kick * jitter * stumbleMul;
-
-      r.x += v;
-      if (r.x >= TRACK_LEN) {
-        r.x = TRACK_LEN; r.finished = true; r.finishTime = time;
-        finishedOrder.push(roster.indexOf(r));
-        if (finishedOrder.length === roster.length) finishRace();
-      }
-    });
-  }
-
-  function finishRace() {
-    running = false;
-
-    // 순위 계산
-    const order = [...finishedOrder]; // 인덱스 목록
-    const first = order[0], second = order[1], third = order[2];
-
-    // 배당 계산
-    const payoutInfo = computePayouts(order);
-
-    // 내 티켓 정산
-    let totalReturn = 0;
-    const lines = [];
-    userTickets.forEach((t)=>{
-      const ret = settleTicket(t, order, payoutInfo);
-      totalReturn += ret;
-      const txt = `${descTicket(t)} → ${ret>0? '적중 ' + fmt(Math.floor(ret)) + '원':'미적중'}`;
-      lines.push(txt);
-    });
-    if (totalReturn>0) updateWallet(Math.floor(totalReturn));
-
-    // 결과 표시
-    const top3 = order.slice(0,3).map(i=> `${roster[i].no}-${roster[i].name}`).join('  /  ');
-    resultEl.innerHTML = `<b>도착 순서</b>: ${top3}  |  총 환급: <span class="money">${fmt(Math.floor(totalReturn))}</span> 원`;
-
-    // 배당 표기
-    payoutsEl.innerHTML = `
-      <div class="row">
-        <div class="pill">단승식: ${fmtOdds(payoutInfo.win)}</div>
-        <div class="pill">연승식: ${payoutInfo.place.map((v,i)=> v? \`#\${roster[ [first,second,third][i] ].no} \${v.toFixed(1)}\` : '').filter(Boolean).join('  |  ')}</div>
-        <div class="pill">복승식: ${payoutInfo.quin? payoutInfo.quin.toFixed(1):'-'}</div>
-        <div class="pill">쌍승식: ${payoutInfo.exact? payoutInfo.exact.toFixed(1):'-'}</div>
-      </div>
-      <div style="margin-top:6px;">${lines.map(s=>`<div>• ${s}</div>`).join('')}</div>
-    `;
-  }
-
-  // 배당 계산(파리뮤추얼)
-  function computePayouts(order) {
-    const first = order[0], second = order[1], third = order[2];
-
-    // 단승
-    const winTotal = pools.win.reduce((a,b)=>a+b.amount,0);
-    const winOn = pools.win[first].amount || 0.001;
-    const winRate = (winTotal*(1-TAKE))/winOn;
-
-    // 연승(3두 각각 따로)
-    const placeTotal = pools.place.reduce((a,b)=>a+b.amount,0);
-    const placeOn1 = pools.place[first].amount || 0.001;
-    const placeOn2 = pools.place[second].amount || 0.001;
-    const placeOn3 = pools.place[third].amount || 0.001;
-    const placeRate1 = (placeTotal*(1-TAKE)/3)/placeOn1; // 3분배(간단화)
-    const placeRate2 = (placeTotal*(1-TAKE)/3)/placeOn2;
-    const placeRate3 = (placeTotal*(1-TAKE)/3)/placeOn3;
-
-    // 복승(무순서)
-    const kQuin = first<second ? `${first}-${second}` : `${second}-${first}`;
-    const quinTotal = Object.values(pools.quin).reduce((a,b)=>a+b,0);
-    const quinOn = (pools.quin[kQuin]||0.001);
-    const quinRate = (quinTotal*(1-TAKE))/quinOn;
-
-    // 쌍승(순서)
-    const kExact = `${first}>${second}`;
-    const exactTotal = Object.values(pools.exact).reduce((a,b)=>a+b,0);
-    const exactOn = (pools.exact[kExact]||0.001);
-    const exactRate = (exactTotal*(1-TAKE))/exactOn;
-
-    return {
-      win: winRate,
-      place: [placeRate1, placeRate2, placeRate3],
-      quin: isFinite(quinRate)?quinRate:null,
-      exact: isFinite(exactRate)?exactRate:null
+    // 팔레트
+    const C = {
+      bg: '#0b0e16',
+      star1: '#8bd3ff',
+      star2: '#f7e6a1',
+      ship: '#6C5CE7',
+      bullet: '#ffcd75',
+      enemy: '#ff5470',
+      enemy2: '#7efc7e',
+      enemyBullet: '#f94d4d',
+      hud: '#c8d0ff',
+      boom: '#ff9e9e',
+      white: '#ffffff'
     };
-  }
 
-  function settleTicket(t, order, pay) {
-    const first = order[0], second = order[1], third = order[2];
-    if (t.type==='WIN') {
-      if (t.a===first) return t.amount * Math.max(1.0, pay.win);
-      return 0;
-    }
-    if (t.type==='PLACE') {
-      if (t.a===first) return t.amount * Math.max(1.0, pay.place[0]);
-      if (t.a===second) return t.amount * Math.max(1.0, pay.place[1]);
-      if (t.a===third) return t.amount * Math.max(1.0, pay.place[2]);
-      return 0;
-    }
-    if (t.type==='QUINELLA') {
-      const [i,j] = t.a<t.b ? [t.a,t.b] : [t.b,t.a];
-      const [fi,fj] = first<second ? [first,second] : [second,first];
-      if (i===fi && j===fj) return t.amount * Math.max(1.0, pay.quin||0);
-      return 0;
-    }
-    if (t.type==='EXACTA') {
-      if (t.a===first && t.b===second) return t.amount * Math.max(1.0, pay.exact||0);
-      return 0;
-    }
-    return 0;
-  }
-
-  function fmt(v){ return v.toLocaleString('ko-KR'); }
-  function fmtOdds(v){ return (isFinite(v)? v.toFixed(1) : '-'); }
-
-  // ---------------- 렌더 ----------------
-  function drawScene() {
-    // clear
-    ctx.fillStyle = '#0b0e16';
-    ctx.fillRect(0,0,canvas.width, canvas.height);
-
-    // 스케일
-    ctx.save();
-    ctx.scale(SCALE, SCALE);
-
-    // 트랙 라인
-    ctx.fillStyle = '#12203a';
-    ctx.fillRect(8, LANE_H*0.5, W-16, LANE_H*(HORSES+1));
-    ctx.strokeStyle = '#203057';
-    ctx.lineWidth = 1;
-    for (let i=1;i<=HORSES;i++){
-      const y = LANE_H*i;
-      ctx.beginPath();
-      ctx.moveTo(8, y+0.5);
-      ctx.lineTo(W-8, y+0.5);
-      ctx.stroke();
-    }
-
-    // 결승선
-    ctx.fillStyle = '#ffffff';
-    const gx = mapX(TRACK_LEN);
-    for (let i=0;i<LANE_H*(HORSES+1); i+=4) {
-      ctx.fillRect(gx, LANE_H*0.5 + i, 2, 2);
-    }
-
-    // 말
-    roster.forEach((r,idx)=>{
-      const x = mapX(r.x);
-      const y = r.y - 6;
-      // 말 몸통
-      ctx.fillStyle = r.color;
-      ctx.fillRect(x, y, 14, 8);
-      // 번호
-      ctx.fillStyle = '#0b0e16';
-      ctx.fillRect(x+4, y+2, 6, 4);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '4px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(r.no%10), x+7, y+4);
-      // 기수(작은 점)
-      ctx.fillStyle = '#ffeaa7';
-      ctx.fillRect(x+2, y-2, 3, 3);
-
-      // 진행 점/스퍼트 효과
-      if (!r.finished && r.stumble>0) {
-        ctx.fillStyle = '#ff9e9e';
-        ctx.fillRect(x-2, y+3, 2, 2);
+    // 난이도 설정
+    const DIFFS = {
+      casual: {
+        life: 5,
+        playerSpd: 1.6,
+        bulletCd: 8,
+        autoCd: 8,
+        spawnBase: 40,
+        spawnFloor: 18,
+        enemyHpA: 1,
+        enemyHpB: 2,
+        enemySpdMul: 1.0,
+        // 적 미사일 관련
+        enemyFireEvery: 110,     // 적 1기당 평균 발사 주기(프레임)
+        enemyFireJitter: 40,     // 주기 랜덤폭
+        enemyBulletSpd: 1.2,     // 적 탄속(픽셀/프레임)
+        enemyAimedChance: 0.6,   // 조준탄 확률(나머지는 직하단)
+        scoreMul: 1
+      },
+      hardcore: {
+        life: 2,
+        playerSpd: 1.4,
+        bulletCd: 12,
+        autoCd: 6,
+        spawnBase: 26,
+        spawnFloor: 10,
+        enemyHpA: 2,
+        enemyHpB: 3,
+        enemySpdMul: 1.25,
+        // 적 미사일 관련(더 공격적)
+        enemyFireEvery: 70,
+        enemyFireJitter: 30,
+        enemyBulletSpd: 1.8,
+        enemyAimedChance: 0.85,
+        scoreMul: 2
       }
+    };
+
+    // URL 파라미터/로컬 저장 읽기
+    const params = new URLSearchParams(location.search);
+    let difficulty = (params.get('mode') === 'hardcore' || params.get('mode') === 'casual')
+      ? params.get('mode')
+      : (localStorage.getItem('dogem:mode') || 'casual');
+
+    function setDifficulty(mode) {
+      if (!DIFFS[mode]) return;
+      difficulty = mode;
+      localStorage.setItem('dogem:mode', mode);
+      updateDiffUI();
+    }
+    function updateDiffUI() {
+      casualBtn.classList.toggle('active', difficulty==='casual');
+      hardcoreBtn.classList.toggle('active', difficulty==='hardcore');
+    }
+    updateDiffUI();
+
+    casualBtn.addEventListener('click', ()=> setDifficulty('casual'));
+    hardcoreBtn.addEventListener('click', ()=> setDifficulty('hardcore'));
+
+    // 오디오 ---------------------------------
+    let audioCtx = null;
+    let soundOn = false;
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function beep({ freq=440, dur=0.08, type='square', vol=0.25, sweepTo=null }) {
+      if (!soundOn) return;
+      ensureAudio();
+      const t0 = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, t0 + dur);
+      gain.gain.setValueAtTime(vol, t0);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + dur);
+    }
+    const sfx = {
+      shoot: ()=> beep({ freq: 720, dur:.05, type:'square', vol:.2 }),
+      explode: ()=> beep({ freq: 160, dur:.18, type:'sawtooth', vol:.35, sweepTo: 40 }),
+      hit: ()=> beep({ freq: 280, dur:.06, type:'triangle', vol:.2 }),
+      enemyShoot: ()=> beep({ freq: 420, dur:.06, type:'square', vol:.18 })
+    };
+    soundBtn.addEventListener('click', () => {
+      soundOn = !soundOn;
+      if (soundOn) ensureAudio();
+      soundBtn.textContent = soundOn ? '🔇 사운드 끄기' : '🔊 사운드 켜기';
+      window.dispatchEvent(new Event('touchstart'));
     });
 
-    // 상단 정보
-    ctx.fillStyle = '#c8d0ff';
-    ctx.font = '7px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(running? 'RACE RUNNING...' : 'READY', 10, 8);
-    ctx.textAlign = 'right';
-    ctx.fillText('Finish ▶', W-10, 8);
+    // 입력 -----------------------------------
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Enter'].includes(e.code)) e.preventDefault();
+      keys[e.code] = true;
+      if (state === 'title' && (e.code === 'Enter' || e.code === 'Space')) startGame();
+      if (state === 'gameover' && (e.code === 'Enter' || e.code === 'Space')) resetToTitle();
+      if (state === 'play' && (e.code === 'Enter' || e.code === 'Space')) tryShoot();
+    });
+    window.addEventListener('keyup', (e)=> keys[e.code] = false);
 
-    ctx.restore();
-  }
+    // 터치/포인터
+    let pointerActive = false;
+    function canvasPos(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width * W;
+      const y = (e.clientY - r.top) / r.height * H;
+      return { x, y };
+    }
+    canvas.addEventListener('pointerdown', (e)=> {
+      pointerActive = true;
+      if (state === 'title') startGame();
+      else if (state === 'gameover') resetToTitle();
+      const p = canvasPos(e); player.x = Math.max(8, Math.min(W-8, p.x));
+      autoShootTimer = 0;
+    });
+    canvas.addEventListener('pointermove', (e)=> {
+      if (!pointerActive) return;
+      const p = canvasPos(e); player.x = Math.max(8, Math.min(W-8, p.x));
+    });
+    window.addEventListener('pointerup', ()=> pointerActive = false);
 
-  function mapX(dist) {
-    const left = 12, right = W-16;
-    return left + (right-left) * clamp(dist/TRACK_LEN, 0, 1);
-  }
+    // 그리기 유틸
+    function px(x,y,w=1,h=1,color=C.white) {
+      ctx.fillStyle = color;
+      ctx.fillRect(Math.floor(x)*SCALE, Math.floor(y)*SCALE, Math.ceil(w)*SCALE, Math.ceil(h)*SCALE);
+    }
+    function clear() {
+      ctx.fillStyle = C.bg;
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+    function text(str, x, y, size=8, color=C.hud, align='left') {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.font = `${size*SCALE}px monospace`;
+      ctx.textAlign = align;
+      ctx.textBaseline = 'top';
+      ctx.scale(1,1);
+      ctx.fillText(str, x*SCALE, y*SCALE);
+      ctx.restore();
+    }
 
-})();
-</script>
+    // 스프라이트
+    function drawSprite(pattern, x, y, colors) {
+      for (let j=0; j<pattern.length; j++) {
+        const row = pattern[j];
+        for (let i=0; i<row.length; i++) {
+          const c = row[i];
+          if (c === '.') continue;
+          const col = colors[c] || C.white;
+          px(x+i, y+j, 1, 1, col);
+        }
+      }
+    }
+    const SPR_SHIP = [
+      "....2....",
+      "...222...",
+      "..22222..",
+      ".2222222.",
+      "222333322",
+      ".2.222.2.",
+      "..2...2..",
+      "....2....",
+    ];
+    const SPR_ENEMY_A = [
+      "..1..1..",
+      ".111111.",
+      "11111111",
+      ".11..11.",
+      "..1..1..",
+      ".1....1.",
+    ];
+    const SPR_ENEMY_B = [
+      "..2..2..",
+      ".222222.",
+      "22222222",
+      ".22..22.",
+      "..2..2..",
+      ".2....2.",
+    ];
+    const SPR_BOOM = [
+      "..3.3..",
+      ".33333.",
+      "3333333",
+      ".33333.",
+      "..3.3..",
+    ];
+
+    // 게임 상태 ------------------------------------------
+    let state = 'title'; // 'title' | 'play' | 'gameover'
+    let score = 0;
+    let life = 3;
+
+    const player = { x: W/2, y: H-28, w: 8, h: 8, spd: 1.5, cooldown: 0, iFrame: 0 };
+    const bullets = [];       // 플레이어 탄
+    const enemies = [];
+    const enemyBullets = [];  // 적 탄
+    const booms = [];
+    const stars = [];
+    let spawnTimer = 0;
+    let autoShootTimer = 0;
+
+    // 별 배경
+    for (let i=0;i<80;i++){
+      stars.push({
+        x: Math.random()*W,
+        y: Math.random()*H,
+        spd: 0.3 + Math.random()*0.8,
+        c: Math.random() < 0.5 ? C.star1 : C.star2
+      });
+    }
+
+    function resetGame() {
+      score = 0;
+      const conf = DIFFS[difficulty];
+      life = conf.life;
+      player.x = W/2; player.y = H-28;
+      player.spd = conf.playerSpd;
+      player.cooldown = 0;
+      player.iFrame = 0;
+      bullets.length = 0; enemies.length = 0; enemyBullets.length = 0; booms.length = 0;
+      spawnTimer = 0; autoShootTimer = 0;
+    }
+    function startGame() {
+      resetGame();
+      state = 'play';
+      if (soundOn) ensureAudio(); // 첫 입력시 오디오 언락
+    }
+    function resetToTitle() { state = 'title'; }
+
+    // 적 스폰
+    function spawnEnemy() {
+      const conf = DIFFS[difficulty];
+      const type = Math.random() < 0.5 ? 'A' : 'B';
+      const x = 12 + Math.random()*(W-24);
+      const y = -8;
+      const baseSpd = 0.4 + Math.random()*0.5;
+      const spd = baseSpd * conf.enemySpdMul;
+      const hp = type==='A' ? conf.enemyHpA : conf.enemyHpB;
+      const amp = type==='B' ? (8 + Math.random()*12) : 0;
+      const freq = 0.02 + Math.random()*0.03;
+
+      // 적 발사 쿨타임 초기화(난수로 분산)
+      const fireEvery = conf.enemyFireEvery + Math.floor((Math.random()*2-1)*conf.enemyFireJitter);
+      const fireCd = Math.floor(Math.random() * Math.max(10, fireEvery)); // 첫발 랜덤 지연
+
+      enemies.push({ x, y, w: 10, h: 8, spd, type, hp, t:0, amp, freq, fireEvery, fireCd });
+    }
+
+    // 플레이어 발사
+    function tryShoot() {
+      if (player.cooldown > 0 || state !== 'play') return;
+      bullets.push({ x: player.x-2, y: player.y-6, w: 2, h: 4, vy: -3 });
+      bullets.push({ x: player.x+0, y: player.y-7, w: 2, h: 4, vy: -3 });
+      player.cooldown = DIFFS[difficulty].bulletCd;
+      sfx.shoot();
+    }
+
+    // 적 발사
+    function enemyShoot(e) {
+      const conf = DIFFS[difficulty];
+      const aimed = Math.random() < conf.enemyAimedChance;
+      if (aimed) {
+        // 플레이어를 향한 조준탄(단순 조준)
+        const dx = (player.x - e.x);
+        const dy = (player.y - e.y);
+        const len = Math.hypot(dx, dy) || 1;
+        const spd = conf.enemyBulletSpd;
+        const vx = dx / len * spd;
+        const vy = dy / len * spd;
+        enemyBullets.push({ x: e.x-1, y: e.y+2, w: 2, h: 3, vx, vy });
+      } else {
+        // 직하단
+        enemyBullets.push({ x: e.x-1, y: e.y+2, w: 2, h: 3, vx: 0, vy: conf.enemyBulletSpd });
+      }
+      sfx.enemyShoot();
+    }
+
+    // 충돌
+    function hit(a,b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    // 폭발
+    function boom(x,y) {
+      booms.push({ x, y, t: 0 });
+      sfx.explode();
+    }
+
+    // 60fps 고정 타임스텝 루프 ----------------------------
+    const FIXED_DT = 1000 / 60; // 16.666...
+    let lastTs = performance.now();
+    let acc = 0;
+
+    function loop(ts) {
+      let delta = ts - lastTs;
+      lastTs = ts;
+      if (delta > 250) delta = 250; // 탭 전환 방어
+      acc += delta;
+
+      let steps = 0;
+      const MAX_STEPS = 5;
+      while (acc >= FIXED_DT && steps < MAX_STEPS) {
+        update(FIXED_DT);
+        acc -= FIXED_DT;
+        steps++;
+      }
+
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function update(dt) {
+      // 배경
+      for (const s of stars) {
+        s.y += s.spd;
+        if (s.y > H) { s.y = 0; s.x = Math.random()*W; }
+      }
+
+      if (state === 'play') {
+        const conf = DIFFS[difficulty];
+
+        // 이동
+        let dx = 0, dy = 0;
+        if (keys['ArrowLeft']) dx -= 1;
+        if (keys['ArrowRight']) dx += 1;
+        if (keys['ArrowUp']) dy -= 0.6;
+        if (keys['ArrowDown']) dy += 0.6;
+        player.x += dx * player.spd;
+        player.y += dy * player.spd;
+        player.x = Math.max(8, Math.min(W-8, player.x));
+        player.y = Math.max(20, Math.min(H-20, player.y));
+
+        // 무적 시간 카운트
+        if (player.iFrame > 0) player.iFrame--;
+
+        // 발사
+        if (keys['Space'] || keys['Enter']) tryShoot();
+        if (pointerActive) {
+          autoShootTimer++;
+          if (autoShootTimer % conf.autoCd === 0) tryShoot();
+        }
+        if (player.cooldown > 0) player.cooldown--;
+
+        // 플레이어 총알 이동
+        for (let i=bullets.length-1; i>=0; i--) {
+          const b = bullets[i];
+          b.y += b.vy;
+          if (b.y < -10) bullets.splice(i,1);
+        }
+
+        // 스폰 템포
+        spawnTimer++;
+        const spawnEvery = Math.max(conf.spawnFloor, conf.spawnBase - Math.floor(score/50));
+        if (spawnTimer >= spawnEvery) { spawnTimer = 0; spawnEnemy(); }
+
+        // 적 이동/발사/피격
+        for (let i=enemies.length-1; i>=0; i--) {
+          const e = enemies[i];
+          e.t += e.freq;
+          e.y += e.spd;
+          if (e.type === 'B') e.x += Math.sin(e.t) * (e.amp * 0.05);
+
+          // 적 발사 쿨타임
+          e.fireCd++;
+          if (e.fireCd >= e.fireEvery && e.y > 6) {
+            enemyShoot(e);
+            e.fireCd = 0;
+          }
+
+          // 총알과 충돌
+          for (let j=bullets.length-1; j>=0; j--) {
+            const b = bullets[j];
+            if (hit(e, b)) {
+              bullets.splice(j,1);
+              e.hp--;
+              sfx.hit();
+              score += 5 * conf.scoreMul;
+              if (e.hp <= 0) {
+                boom(e.x, e.y);
+                enemies.splice(i,1);
+                score += 20 * conf.scoreMul;
+              }
+              break;
+            }
+          }
+
+          // 플레이어와 충돌
+          if (i < enemies.length && hit(e, player) && player.iFrame === 0) {
+            boom(e.x, e.y);
+            enemies.splice(i,1);
+            life--;
+            player.iFrame = 60; // 1초 무적
+            if (life <= 0) state = 'gameover';
+          }
+
+          // 화면 밖
+          if (i < enemies.length && e.y > H+12) enemies.splice(i,1);
+        }
+
+        // 적 탄 이동/플레이어 피격
+        for (let i = enemyBullets.length - 1; i >= 0; i--) {
+          const eb = enemyBullets[i];
+          eb.x += eb.vx;
+          eb.y += eb.vy;
+
+          if (player.iFrame === 0 && hit(eb, player)) {
+            enemyBullets.splice(i,1);
+            life--;
+            player.iFrame = 60; // 1초 무적
+            sfx.hit();
+            if (life <= 0) state = 'gameover';
+            continue;
+          }
+
+          if (eb.y > H+10 || eb.y < -10 || eb.x < -10 || eb.x > W+10) {
+            enemyBullets.splice(i,1);
+          }
+        }
+
+        // 폭발 이펙트
+        for (let i=booms.length-1; i>=0; i--) {
+          const b = booms[i];
+          b.t++;
+          if (b.t > 18) booms.splice(i,1);
+        }
+      }
+
+      // HUD
+      HUD.textContent = `SCORE ${score}  |  LIFE ❤×${life}  |  MODE ${difficulty.toUpperCase()}`;
+    }
+
+    function render() {
+      clear();
+
+      // 별
+      for (const s of stars) px(s.x, s.y, 1, 1, s.c);
+
+      if (state === 'title') {
+        text('DOT SHOOTER', W/2-46, H/2-36, 10, C.white);
+        text('엔터/스페이스로 시작', W/2-44, H/2-14, 8, C.hud);
+        text(`현재 난이도: ${difficulty==='casual'?'캐주얼':'하드코어'}`, W/2-48, H/2+8, 8, C.hud);
+        text('아래 버튼으로 변경 가능', W/2-48, H/2+22, 8, C.hud);
+      }
+
+      // 플레이어(무적 중 깜박임)
+      if (state !== 'gameover') {
+        const flick = (player.iFrame > 0) ? ((Math.floor(player.iFrame/4) % 2) === 0) : true;
+        if (flick) drawSprite(SPR_SHIP, Math.round(player.x-4), Math.round(player.y-4), { '2':C.ship, '3':'#5b4fd1' });
+      }
+
+      // 플레이어 총알
+      for (const b of bullets) px(b.x, b.y, b.w, b.h, C.bullet);
+
+      // 적
+      for (const e of enemies) {
+        if (e.type === 'A') drawSprite(SPR_ENEMY_A, Math.round(e.x-4), Math.round(e.y-4), { '1':C.enemy });
+        else drawSprite(SPR_ENEMY_B, Math.round(e.x-4), Math.round(e.y-4), { '2':C.enemy2 });
+      }
+
+      // 적 총알
+      for (const eb of enemyBullets) {
+        px(eb.x, eb.y, eb.w, eb.h, C.enemyBullet);
+      }
+
+      // 폭발
+      for (const b of booms) drawSprite(SPR_BOOM, Math.round(b.x-3), Math.round(b.y-3), { '3': C.boom });
+
+      if (state === 'gameover') {
+        text('GAME OVER', W/2-32, H/2-18, 10, C.white);
+        text(`SCORE ${score}`, W/2-26, H/2+2, 8, C.hud);
+        text('엔터/스페이스로 타이틀', W/2-48, H/2+20, 8, C.hud);
+      }
+    }
+
+    requestAnimationFrame(loop);
+  })();
+  </script>
 </body>
 </html>
